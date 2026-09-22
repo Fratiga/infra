@@ -6,6 +6,11 @@ services:
     environment:
       ORACLE_PASSWORD: EduTutorRoot2026
       ORACLE_DATABASE: XEPDB1
+      # La instancia ec2-apps tiene poca RAM real; sin esto Oracle intenta
+      # autodimensionar la SGA/PGA y falla con ORA-27104 al no conseguir la
+      # memoria compartida que calculó. Con esto fija un tamaño que sí cabe.
+      INIT_SGA_SIZE: '400'
+      INIT_PGA_SIZE: '200'
     ports:
       - "1521:1521"
     volumes:
