@@ -5,7 +5,9 @@ services:
     shm_size: '1g'
     environment:
       ORACLE_PASSWORD: EduTutorRoot2026
-      ORACLE_DATABASE: XEPDB1
+      # OJO: no fijar ORACLE_DATABASE=XEPDB1 — la imagen ya crea ese PDB por
+      # defecto; pedirle que cree "otro" con el mismo nombre falla con
+      # ORA-65012 (Pluggable database XEPDB1 already exists) en un init limpio.
       # La instancia ec2-apps tiene poca RAM real; sin esto Oracle intenta
       # autodimensionar la SGA/PGA y falla con ORA-27104 al no conseguir la
       # memoria compartida que calculó. Con esto fija un tamaño que sí cabe.
