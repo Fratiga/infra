@@ -1,0 +1,98 @@
+services:
+  oracle:
+    image: gvenzl/oracle-xe:21-slim
+    container_name: oracle
+    environment:
+      ORACLE_PASSWORD: EduTutorRoot2026
+      ORACLE_DATABASE: XEPDB1
+    ports:
+      - "1521:1521"
+    volumes:
+      - oracle_data:/opt/oracle/oradata
+      - ./oracle-init:/container-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+
+  catalog:
+    build: ../../ms-edututor-catalog
+    container_name: catalog
+    ports:
+      - "8082:8082"
+    environment:
+      DB_URL: jdbc:oracle:thin:@//oracle:1521/XEPDB1
+    depends_on:
+      oracle:
+        condition: service_healthy
+    restart: unless-stopped
+
+  sessions:
+    build: ../../ms-edututor-sessions
+    container_name: sessions
+    ports:
+      - "8083:8083"
+    environment:
+      DB_URL: jdbc:oracle:thin:@//oracle:1521/XEPDB1
+      # IP publica de ec2-kafka (compañero) — cambia si el Learner Lab se reinicia.
+      KAFKA_BOOTSTRAP_SERVERS: 184.192.63.192:9092
+    depends_on:
+      oracle:
+        condition: service_healthy
+    restart: unless-stopped
+
+  notify:
+    build: ../../ms-edututor-notify
+    container_name: notify
+    environment:
+      # IP publica de ec2-mq (compañero) — cambia si el Learner Lab se reinicia.
+      RABBITMQ_HOST: 44.208.153.147
+    restart: unless-stopped
+
+  audit:
+    build: ../../ms-edututor-audit
+    container_name: audit
+    ports:
+      - "8084:8084"
+    environment:
+      DB_URL: jdbc:oracle:thin:@//oracle:1521/XEPDB1
+      KAFKA_BOOTSTRAP_SERVERS: 184.192.63.192:9092
+    depends_on:
+      oracle:
+        condition: service_healthy
+    restart: unless-stopped
+
+  report:
+    build: ../../ms-edututor-report
+    container_name: report
+    ports:
+      - "8085:8085"
+    environment:
+      DB_URL: jdbc:oracle:thin:@//oracle:1521/XEPDB1
+      KAFKA_BOOTSTRAP_SERVERS: 184.192.63.192:9092
+    depends_on:
+      oracle:
+        condition: service_healthy
+    restart: unless-stopped
+
+  bff:
+    build: ../../ms-edututor-bff
+    container_name: bff
+    ports:
+      - "8080:8080"
+    environment:
+      CATALOG_URL: http://catalog:8082/api
+      SESSIONS_URL: http://sessions:8083/api
+      AUDIT_URL: http://audit:8084/api
+      REPORT_URL: http://report:8085/api
+    depends_on:
+      - catalog
+      - sessions
+      - audit
+      - report
+    restart: unless-stopped
+
+volumes:
+  oracle_data:
