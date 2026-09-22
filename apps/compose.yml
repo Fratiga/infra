@@ -2,6 +2,7 @@ services:
   oracle:
     image: gvenzl/oracle-xe:21-slim
     container_name: oracle
+    shm_size: '1g'
     environment:
       ORACLE_PASSWORD: EduTutorRoot2026
       ORACLE_DATABASE: XEPDB1
