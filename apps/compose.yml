@@ -3,6 +3,12 @@ services:
     image: gvenzl/oracle-xe:21-slim
     container_name: oracle
     shm_size: '1g'
+    # Sin límite explícito, una JVM con fuga o pico de tráfico puede reclamar
+    # memoria del host sin tope y el kernel termina matando a Oracle (así
+    # pasó: 40h corriendo y lo mató un OOM). Con mem_limit por contenedor, si
+    # algo se pasa de la raya el kernel mata SOLO a ese contenedor — Oracle
+    # queda a salvo y el que se cayó vuelve solo por restart:unless-stopped.
+    mem_limit: 850m
     environment:
       ORACLE_PASSWORD: EduTutorRoot2026
       # OJO: no fijar ORACLE_DATABASE=XEPDB1 — la imagen ya crea ese PDB por
@@ -28,10 +34,12 @@ services:
   catalog:
     build: ../../ms-edututor-catalog
     container_name: catalog
+    mem_limit: 160m
     ports:
       - "8082:8082"
     environment:
       DB_URL: jdbc:oracle:thin:@//oracle:1521/XEPDB1
+      JAVA_TOOL_OPTIONS: -Xmx90m -XX:MaxMetaspaceSize=56m
     depends_on:
       oracle:
         condition: service_healthy
@@ -40,11 +48,15 @@ services:
   sessions:
     build: ../../ms-edututor-sessions
     container_name: sessions
+    mem_limit: 180m
     ports:
       - "8083:8083"
     environment:
       DB_URL: jdbc:oracle:thin:@//oracle:1521/XEPDB1
-      # IP publica de ec2-kafka (compañero) — cambia si el Learner Lab se reinicia.
+      JAVA_TOOL_OPTIONS: -Xmx100m -XX:MaxMetaspaceSize=64m
+      # Elastic IP de ec2-kafka (compañero) — fija, no cambia entre reinicios
+      # del lab. Si no responde, es que su instancia/contenedores no están
+      # arriba en ese momento, no que la IP haya cambiado.
       KAFKA_BOOTSTRAP_SERVERS: 184.192.63.192:9092
     depends_on:
       oracle:
@@ -54,19 +66,25 @@ services:
   notify:
     build: ../../ms-edututor-notify
     container_name: notify
+    mem_limit: 150m
     environment:
-      # IP publica de ec2-mq (compañero) — cambia si el Learner Lab se reinicia.
+      JAVA_TOOL_OPTIONS: -Xmx80m -XX:MaxMetaspaceSize=56m
+      # Elastic IP de ec2-mq (compañero) — fija, no cambia entre reinicios
+      # del lab. Si no responde, es que su instancia/contenedores no están
+      # arriba en ese momento, no que la IP haya cambiado.
       RABBITMQ_HOST: 44.208.153.147
     restart: unless-stopped
 
   audit:
     build: ../../ms-edututor-audit
     container_name: audit
+    mem_limit: 170m
     ports:
       - "8084:8084"
     environment:
       DB_URL: jdbc:oracle:thin:@//oracle:1521/XEPDB1
       KAFKA_BOOTSTRAP_SERVERS: 184.192.63.192:9092
+      JAVA_TOOL_OPTIONS: -Xmx90m -XX:MaxMetaspaceSize=64m
     depends_on:
       oracle:
         condition: service_healthy
@@ -75,11 +93,13 @@ services:
   report:
     build: ../../ms-edututor-report
     container_name: report
+    mem_limit: 180m
     ports:
       - "8085:8085"
     environment:
       DB_URL: jdbc:oracle:thin:@//oracle:1521/XEPDB1
       KAFKA_BOOTSTRAP_SERVERS: 184.192.63.192:9092
+      JAVA_TOOL_OPTIONS: -Xmx100m -XX:MaxMetaspaceSize=64m
     depends_on:
       oracle:
         condition: service_healthy
@@ -88,6 +108,7 @@ services:
   bff:
     build: ../../ms-edututor-bff
     container_name: bff
+    mem_limit: 200m
     ports:
       - "8080:8080"
     environment:
@@ -95,6 +116,7 @@ services:
       SESSIONS_URL: http://sessions:8083/api
       AUDIT_URL: http://audit:8084/api
       REPORT_URL: http://report:8085/api
+      JAVA_TOOL_OPTIONS: -Xmx120m -XX:MaxMetaspaceSize=64m
     depends_on:
       - catalog
       - sessions
