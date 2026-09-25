@@ -28,8 +28,17 @@ pase antes de arrancar.
 
 ## IPs externas
 
-`KAFKA_BOOTSTRAP_SERVERS` y `RABBITMQ_HOST` apuntan a las IPs públicas de
-`ec2-kafka` y `ec2-mq` (cuenta AWS del compañero). **AWS Academy asigna una IP
-pública nueva cada vez que se reinicia el Learner Lab** — si algo deja de
-conectar después de una pausa del lab, lo primero a revisar es si esas IPs
-cambiaron, y actualizar aquí + el Security Group de `ec2-apps` en consecuencia.
+`KAFKA_BOOTSTRAP_SERVERS` y `RABBITMQ_HOST` apuntan a las **Elastic IP** de
+`ec2-kafka` y `ec2-mq` (cuenta AWS del compañero) — no cambian entre
+reinicios del lab, así que no hay que tocarlas cada vez.
+
+Si algo deja de conectar después de una pausa del lab, el problema no es la
+IP: es que la instancia de tu compañero (o los contenedores de Kafka/RabbitMQ
+dentro de ella) simplemente no están arriba en ese momento. Pídele que la
+inicie y levante `docker compose up -d` de su lado antes de asumir que hay
+que cambiar algo acá.
+
+`ec2-apps` en cambio **no** tiene Elastic IP — su IP pública sí cambia cada
+vez que se reinicia el lab (hay que actualizar el Security Group con la IP
+saliente actual si se restringe por IP, y regenerar el build del frontend
+apuntando a la IP nueva si el proxy de API Gateway la usa directamente).
