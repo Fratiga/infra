@@ -1,0 +1,19 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate-compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar sintaxis de los compose.yml
+        run: |
+          docker compose -f apps/compose.yml config -q
+          docker compose -f mq/compose.yml config -q
+          docker compose -f kafka/compose.yml config -q
