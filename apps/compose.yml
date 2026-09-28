@@ -8,7 +8,11 @@ services:
     # pasó: 40h corriendo y lo mató un OOM). Con mem_limit por contenedor, si
     # algo se pasa de la raya el kernel mata SOLO a ese contenedor — Oracle
     # queda a salvo y el que se cayó vuelve solo por restart:unless-stopped.
-    mem_limit: 850m
+    # Oracle XE se niega a arrancar con menos de 1 GiB dentro del contenedor
+    # ("not enough memory available"), por eso no baja de ~1100m. La suma de
+    # límites supera la RAM del host (1.9 GB), pero hay 2 GB de swap y el uso
+    # real de cada JVM queda por debajo de su tope.
+    mem_limit: 1100m
     environment:
       ORACLE_PASSWORD: EduTutorRoot2026
       # OJO: no fijar ORACLE_DATABASE=XEPDB1 — la imagen ya crea ese PDB por
