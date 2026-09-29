@@ -39,12 +39,12 @@ services:
   catalog:
     build: ../../ms-edututor-catalog
     container_name: catalog
-    mem_limit: 160m
+    mem_limit: 320m
     ports:
       - "8082:8082"
     environment:
       DB_URL: jdbc:oracle:thin:@//oracle:1521/XEPDB1
-      JAVA_TOOL_OPTIONS: -Xmx90m -XX:MaxMetaspaceSize=56m
+      JAVA_TOOL_OPTIONS: -Xmx90m -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+UseSerialGC
     depends_on:
       oracle:
         condition: service_healthy
@@ -53,12 +53,12 @@ services:
   sessions:
     build: ../../ms-edututor-sessions
     container_name: sessions
-    mem_limit: 180m
+    mem_limit: 320m
     ports:
       - "8083:8083"
     environment:
       DB_URL: jdbc:oracle:thin:@//oracle:1521/XEPDB1
-      JAVA_TOOL_OPTIONS: -Xmx100m -XX:MaxMetaspaceSize=64m
+      JAVA_TOOL_OPTIONS: -Xmx100m -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+UseSerialGC
       # Elastic IP de ec2-kafka (compañero) — fija, no cambia entre reinicios
       # del lab. Si no responde, es que su instancia/contenedores no están
       # arriba en ese momento, no que la IP haya cambiado.
@@ -71,9 +71,9 @@ services:
   notify:
     build: ../../ms-edututor-notify
     container_name: notify
-    mem_limit: 150m
+    mem_limit: 280m
     environment:
-      JAVA_TOOL_OPTIONS: -Xmx80m -XX:MaxMetaspaceSize=56m
+      JAVA_TOOL_OPTIONS: -Xmx80m -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+UseSerialGC
       # Elastic IP de ec2-mq (compañero) — fija, no cambia entre reinicios
       # del lab. Si no responde, es que su instancia/contenedores no están
       # arriba en ese momento, no que la IP haya cambiado.
@@ -83,13 +83,13 @@ services:
   audit:
     build: ../../ms-edututor-audit
     container_name: audit
-    mem_limit: 170m
+    mem_limit: 320m
     ports:
       - "8084:8084"
     environment:
       DB_URL: jdbc:oracle:thin:@//oracle:1521/XEPDB1
       KAFKA_BOOTSTRAP_SERVERS: 184.192.63.192:9092
-      JAVA_TOOL_OPTIONS: -Xmx90m -XX:MaxMetaspaceSize=64m
+      JAVA_TOOL_OPTIONS: -Xmx90m -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+UseSerialGC
     depends_on:
       oracle:
         condition: service_healthy
@@ -98,13 +98,13 @@ services:
   report:
     build: ../../ms-edututor-report
     container_name: report
-    mem_limit: 180m
+    mem_limit: 320m
     ports:
       - "8085:8085"
     environment:
       DB_URL: jdbc:oracle:thin:@//oracle:1521/XEPDB1
       KAFKA_BOOTSTRAP_SERVERS: 184.192.63.192:9092
-      JAVA_TOOL_OPTIONS: -Xmx100m -XX:MaxMetaspaceSize=64m
+      JAVA_TOOL_OPTIONS: -Xmx100m -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+UseSerialGC
     depends_on:
       oracle:
         condition: service_healthy
@@ -113,7 +113,7 @@ services:
   bff:
     build: ../../ms-edututor-bff
     container_name: bff
-    mem_limit: 200m
+    mem_limit: 320m
     ports:
       - "8080:8080"
     environment:
@@ -121,7 +121,7 @@ services:
       SESSIONS_URL: http://sessions:8083/api
       AUDIT_URL: http://audit:8084/api
       REPORT_URL: http://report:8085/api
-      JAVA_TOOL_OPTIONS: -Xmx120m -XX:MaxMetaspaceSize=64m
+      JAVA_TOOL_OPTIONS: -Xmx120m -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=32m -Xss512k -XX:+UseSerialGC
     depends_on:
       - catalog
       - sessions
