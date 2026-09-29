@@ -14,6 +14,7 @@ services:
     # real de Oracle ronda 1 GB y hay 2 GB de swap; lo que protege a Oracle del
     # OOM son los topes de las JVMs de abajo, no este número.
     mem_limit: 2g
+    restart: unless-stopped
     environment:
       ORACLE_PASSWORD: EduTutorRoot2026
       # OJO: no fijar ORACLE_DATABASE=XEPDB1 — la imagen ya crea ese PDB por
