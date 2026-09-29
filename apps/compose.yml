@@ -64,6 +64,8 @@ services:
       # del lab. Si no responde, es que su instancia/contenedores no están
       # arriba en ese momento, no que la IP haya cambiado.
       KAFKA_BOOTSTRAP_SERVERS: 184.192.63.192:9092
+      # Comandos hacia notify (mismo broker que consume notify)
+      RABBITMQ_HOST: 44.208.153.147
     depends_on:
       oracle:
         condition: service_healthy
