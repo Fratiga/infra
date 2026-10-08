@@ -14,8 +14,10 @@ public class RabbitmqAdminApplication {
 
 	private static final Logger log = LoggerFactory.getLogger(RabbitmqAdminApplication.class);
 
+	// Es una tarea de un solo uso: declara la topología y termina. Sin esto la
+	// conexión AMQP mantiene viva la JVM y el contenedor nunca finaliza.
 	public static void main(String[] args) {
-		SpringApplication.run(RabbitmqAdminApplication.class, args);
+		System.exit(SpringApplication.exit(SpringApplication.run(RabbitmqAdminApplication.class, args)));
 	}
 
 	// RabbitAdmin declara los beans Queue/Exchange/Binding de forma perezosa,

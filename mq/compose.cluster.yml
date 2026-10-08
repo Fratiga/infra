@@ -1,0 +1,101 @@
+# Clúster RabbitMQ de 2 nodos para EduTutor (el documento de arquitectura lo
+# pide con colas espejo). compose.yml sigue siendo el de un solo nodo.
+#
+# Orden de arranque: rabbitmq-1 -> rabbitmq-2 (se une solo) -> rabbitmq-policy
+# (réplica ha-all) -> rabbitmq-topology (exchanges, colas y DLQ), de modo que
+# las colas nacen ya espejadas y ms-edututor-notify no encuentra colas ausentes.
+#
+# Puertos publicados: nodo 1 -> 5672/15672, nodo 2 -> 5673/15673.
+services:
+  rabbitmq-1:
+    image: rabbitmq:3.12-management-alpine
+    container_name: rabbitmq-1
+    hostname: rabbitmq-1
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:-edututor_cookie_cambiar}
+    volumes:
+      - rabbitmq_data_1:/var/lib/rabbitmq
+      - ./rabbitmq-cluster.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    networks:
+      - rabbitmq_cluster
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+
+  rabbitmq-2:
+    image: rabbitmq:3.12-management-alpine
+    container_name: rabbitmq-2
+    hostname: rabbitmq-2
+    restart: unless-stopped
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:-edututor_cookie_cambiar}
+    volumes:
+      - rabbitmq_data_2:/var/lib/rabbitmq
+      - ./rabbitmq-cluster.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    networks:
+      - rabbitmq_cluster
+    depends_on:
+      rabbitmq-1:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+
+  rabbitmq-policy:
+    image: curlimages/curl:8.10.1
+    container_name: rabbitmq-policy
+    restart: "no"
+    depends_on:
+      rabbitmq-2:
+        condition: service_healthy
+    networks:
+      - rabbitmq_cluster
+    environment:
+      RABBITMQ_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-guest}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        curl -fsS --retry 30 --retry-delay 3 --retry-connrefused -u "$${RABBITMQ_USER}:$${RABBITMQ_PASS}" -X PUT \
+          -H "content-type: application/json" \
+          -d '{"pattern":".*","apply-to":"queues","definition":{"ha-mode":"all","ha-sync-mode":"automatic"}}' \
+          http://rabbitmq-1:15672/api/policies/%2F/ha-all && echo "politica ha-all aplicada"
+
+  rabbitmq-topology:
+    build: ./rabbitmq-admin
+    container_name: rabbitmq-topology
+    restart: "no"
+    depends_on:
+      rabbitmq-policy:
+        condition: service_completed_successfully
+    networks:
+      - rabbitmq_cluster
+    environment:
+      RABBITMQ_ADDRESSES: rabbitmq-1:5672,rabbitmq-2:5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASS:-guest}
+
+volumes:
+  rabbitmq_data_1:
+  rabbitmq_data_2:
+
+networks:
+  rabbitmq_cluster:
+    driver: bridge
