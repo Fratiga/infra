@@ -2,7 +2,7 @@
 # pide con colas espejo). compose.yml sigue siendo el de un solo nodo.
 #
 # Orden de arranque: rabbitmq-1 -> rabbitmq-2 (se une solo) -> rabbitmq-policy
-# (réplica ha-all) -> rabbitmq-topology (exchanges, colas y DLQ), de modo que
+# (réplica ha-all) -> rabbitmq-admin (exchanges, colas y DLQ + API REST), de modo que
 # las colas nacen ya espejadas y ms-edututor-notify no encuentra colas ausentes.
 #
 # Puertos publicados: nodo 1 -> 5672/15672, nodo 2 -> 5673/15673.
@@ -78,10 +78,16 @@ services:
           -d '{"pattern":".*","apply-to":"queues","definition":{"ha-mode":"all","ha-sync-mode":"automatic"}}' \
           http://rabbitmq-1:15672/api/policies/%2F/ha-all && echo "politica ha-all aplicada"
 
-  rabbitmq-topology:
+  # Microservicio administrador: declara exchanges, colas y DLQ al arrancar y
+  # expone la API REST de administración (/api/queues, /api/exchanges,
+  # /api/bindings). Solo escucha en el loopback del host: no tiene
+  # autenticación, así que se usa por SSH o desde la misma instancia.
+  rabbitmq-admin:
     build: ./rabbitmq-admin
-    container_name: rabbitmq-topology
-    restart: "no"
+    container_name: rabbitmq-admin
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8086:8086"
     depends_on:
       rabbitmq-policy:
         condition: service_completed_successfully
