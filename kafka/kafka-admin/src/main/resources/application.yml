@@ -1,0 +1,67 @@
+spring:
+  application:
+    name: kafka-admin
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+server:
+  port: ${SERVER_PORT:8087}
+
+# Tópicos de EduTutor. Es la única fuente: el aprovisionamiento al arrancar
+# (TopicProvisioner) y la protección contra borrados salen de esta lista.
+# Los servicios productores y consumidores usan estos mismos nombres en su
+# propio application.yml.
+#
+# Cada flujo tiene los parámetros que le corresponden:
+#  - sessions.events: log de hechos, se descarta por tiempo (7 días). Lo leen
+#    audit y report, cada uno con su grupo.
+#  - sessions.alerts: una alerta por (estudiante, regla); se compacta para
+#    conservar solo la última de cada key, y además se acota a 30 días.
+#  - *.DLT: mensajes que no se pudieron procesar; se guardan más tiempo (14
+#    días) para poder revisarlos. Tienen las mismas particiones que su tópico
+#    de origen, porque el reenvío mantiene el número de partición.
+#
+# replication-factor y min-insync-replicas dependen del clúster: 1 en un solo
+# broker (EC2 / desarrollo), 3 y 2 en el clúster de 3 brokers (compose.cluster.yml).
+edututor:
+  kafka:
+    provision-on-startup: ${KAFKA_PROVISION_ON_STARTUP:true}
+    topics:
+      - name: sessions.events
+        partitions: 3
+        replication-factor: ${KAFKA_REPLICATION_FACTOR:1}
+        configs:
+          "[retention.ms]": "604800000"
+          "[cleanup.policy]": delete
+          "[min.insync.replicas]": ${KAFKA_MIN_ISR:1}
+          "[compression.type]": producer
+
+      - name: sessions.alerts
+        partitions: 3
+        replication-factor: ${KAFKA_REPLICATION_FACTOR:1}
+        configs:
+          "[retention.ms]": "2592000000"
+          "[cleanup.policy]": compact,delete
+          "[min.cleanable.dirty.ratio]": "0.1"
+          "[segment.ms]": "86400000"
+          "[min.insync.replicas]": ${KAFKA_MIN_ISR:1}
+
+      - name: sessions.events.DLT
+        partitions: 3
+        replication-factor: ${KAFKA_REPLICATION_FACTOR:1}
+        configs:
+          "[retention.ms]": "1209600000"
+          "[cleanup.policy]": delete
+          "[min.insync.replicas]": ${KAFKA_MIN_ISR:1}
+
+      - name: sessions.alerts.DLT
+        partitions: 3
+        replication-factor: ${KAFKA_REPLICATION_FACTOR:1}
+        configs:
+          "[retention.ms]": "1209600000"
+          "[cleanup.policy]": delete
+          "[min.insync.replicas]": ${KAFKA_MIN_ISR:1}
+
+# Token de la API de administración (cabecera X-Admin-Token). Vacío = sin
+# exigirlo, solo para desarrollo local; en cualquier servidor debe definirse.
+edututor.admin.token: ${KAFKA_ADMIN_TOKEN:}

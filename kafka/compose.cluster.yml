@@ -1,0 +1,167 @@
+# Clúster Kafka de EduTutor: 3 nodos Zookeeper + 3 brokers (factor de réplica 3,
+# min.insync.replicas 2) + Kafka UI + kafka-admin. compose.yml sigue siendo el
+# de un solo broker para desarrollo.
+#
+# Con 3 brokers y min.insync.replicas=2 el clúster aguanta la caída de un
+# broker sin perder escrituras (los productores usan acks=all).
+#
+# Orden de arranque: zookeeper-1..3 -> kafka-1..3 -> kafka-admin (declara los
+# tópicos con RF 3) y kafka-ui.
+#
+# Desde el equipo (fuera de Docker):  localhost:19092, 19093, 19094
+# Entre contenedores:                 kafka-1:29092, kafka-2:29092, kafka-3:29092
+#
+# Uso:  docker compose -f compose.cluster.yml up -d --build
+#       Kafka UI -> http://localhost:8090      kafka-admin -> http://localhost:8087
+x-kafka-comun: &kafka-comun
+  image: confluentinc/cp-kafka:7.7.1
+  restart: unless-stopped
+  networks: [kafka_cluster]
+  environment: &kafka-env
+    KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
+    KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNO:PLAINTEXT,EXTERNO:PLAINTEXT
+    KAFKA_INTER_BROKER_LISTENER_NAME: INTERNO
+    KAFKA_LISTENERS: INTERNO://0.0.0.0:29092,EXTERNO://0.0.0.0:9092
+    KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+    KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+    KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+    KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+    KAFKA_MIN_INSYNC_REPLICAS: 2
+    # Los tópicos solo se crean desde kafka-admin; un cliente con un nombre mal
+    # escrito no debe crear uno nuevo en silencio.
+    KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    # Dejar que un grupo nuevo empiece sin esperar 3 s por el rebalanceo inicial.
+    KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    KAFKA_HEAP_OPTS: -Xmx512m -Xms256m
+
+x-zookeeper-comun: &zookeeper-comun
+  image: confluentinc/cp-zookeeper:7.7.1
+  restart: unless-stopped
+  networks: [kafka_cluster]
+
+services:
+  zookeeper-1:
+    <<: *zookeeper-comun
+    container_name: zookeeper-1
+    environment:
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: zookeeper-1:2888:3888;zookeeper-2:2888:3888;zookeeper-3:2888:3888
+    volumes:
+      - zk_data_1:/var/lib/zookeeper/data
+      - zk_log_1:/var/lib/zookeeper/log
+
+  zookeeper-2:
+    <<: *zookeeper-comun
+    container_name: zookeeper-2
+    environment:
+      ZOOKEEPER_SERVER_ID: 2
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: zookeeper-1:2888:3888;zookeeper-2:2888:3888;zookeeper-3:2888:3888
+    volumes:
+      - zk_data_2:/var/lib/zookeeper/data
+      - zk_log_2:/var/lib/zookeeper/log
+
+  zookeeper-3:
+    <<: *zookeeper-comun
+    container_name: zookeeper-3
+    environment:
+      ZOOKEEPER_SERVER_ID: 3
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_SERVERS: zookeeper-1:2888:3888;zookeeper-2:2888:3888;zookeeper-3:2888:3888
+    volumes:
+      - zk_data_3:/var/lib/zookeeper/data
+      - zk_log_3:/var/lib/zookeeper/log
+
+  kafka-1:
+    <<: *kafka-comun
+    container_name: kafka-1
+    depends_on: [zookeeper-1, zookeeper-2, zookeeper-3]
+    ports:
+      - "19092:9092"
+    environment:
+      <<: *kafka-env
+      KAFKA_BROKER_ID: 1
+      KAFKA_ADVERTISED_LISTENERS: INTERNO://kafka-1:29092,EXTERNO://${KAFKA_HOST:-localhost}:19092
+    volumes:
+      - kafka_data_1:/var/lib/kafka/data
+
+  kafka-2:
+    <<: *kafka-comun
+    container_name: kafka-2
+    depends_on: [zookeeper-1, zookeeper-2, zookeeper-3]
+    ports:
+      - "19093:9092"
+    environment:
+      <<: *kafka-env
+      KAFKA_BROKER_ID: 2
+      KAFKA_ADVERTISED_LISTENERS: INTERNO://kafka-2:29092,EXTERNO://${KAFKA_HOST:-localhost}:19093
+    volumes:
+      - kafka_data_2:/var/lib/kafka/data
+
+  kafka-3:
+    <<: *kafka-comun
+    container_name: kafka-3
+    depends_on: [zookeeper-1, zookeeper-2, zookeeper-3]
+    ports:
+      - "19094:9092"
+    environment:
+      <<: *kafka-env
+      KAFKA_BROKER_ID: 3
+      KAFKA_ADVERTISED_LISTENERS: INTERNO://kafka-3:29092,EXTERNO://${KAFKA_HOST:-localhost}:19094
+    volumes:
+      - kafka_data_3:/var/lib/kafka/data
+
+  # API REST de administración: al arrancar declara los tópicos (RF 3, ISR 2) y
+  # expone crear/listar/modificar/borrar tópicos y operar grupos de consumo.
+  kafka-admin:
+    build: ./kafka-admin
+    container_name: kafka-admin
+    restart: unless-stopped
+    networks: [kafka_cluster]
+    depends_on: [kafka-1, kafka-2, kafka-3]
+    ports:
+      - "8087:8087"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
+      KAFKA_REPLICATION_FACTOR: 3
+      KAFKA_MIN_ISR: 2
+      KAFKA_ADMIN_TOKEN: ${KAFKA_ADMIN_TOKEN:-}
+      JAVA_TOOL_OPTIONS: -Xmx192m
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    restart: unless-stopped
+    networks: [kafka_cluster]
+    depends_on: [kafka-1, kafka-2, kafka-3]
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: edututor
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-1:29092,kafka-2:29092,kafka-3:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper-1:2181
+      DYNAMIC_CONFIG_ENABLED: "true"
+
+networks:
+  kafka_cluster:
+
+volumes:
+  zk_data_1:
+  zk_log_1:
+  zk_data_2:
+  zk_log_2:
+  zk_data_3:
+  zk_log_3:
+  kafka_data_1:
+  kafka_data_2:
+  kafka_data_3:

@@ -1,0 +1,21 @@
+# Solo Kafka UI, para mirar un Kafka que ya está corriendo en otro lado (el de
+# EC2, el clúster local o el de un solo broker). No levanta brokers.
+#
+#   KAFKA_BOOTSTRAP=184.192.63.192:9092 docker compose -f compose.ui.yml up -d
+#   KAFKA_BOOTSTRAP=host.docker.internal:19092,host.docker.internal:19093 docker compose -f compose.ui.yml up -d
+#
+# Interfaz en http://localhost:8090. Permite ver tópicos, mensajes, particiones,
+# configuración y grupos de consumo con su LAG.
+services:
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    restart: unless-stopped
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: ${KAFKA_CLUSTER_NAME:-edututor}
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: ${KAFKA_BOOTSTRAP:?defina KAFKA_BOOTSTRAP, por ejemplo localhost:9092}
+      DYNAMIC_CONFIG_ENABLED: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

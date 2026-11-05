@@ -3,7 +3,8 @@
 #   localhost:9092 un cliente remoto (ec2-apps) conecta al bootstrap y luego
 #   el broker le dice "habla con localhost", que no es él.
 # - kafka-init crea los tópicos (mismos que kafka-admin) para no depender de
-#   correr esa app aparte.
+#   correr esa app aparte. kafka-admin queda disponible con el perfil "admin":
+#   docker compose -f compose.ec2.yml --profile admin up -d kafka-admin
 # Uso: docker compose -f compose.ec2.yml up -d
 services:
   zookeeper:
@@ -30,6 +31,7 @@ services:
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       KAFKA_HEAP_OPTS: -Xmx768m -Xms256m
 
   kafka-init:
@@ -42,11 +44,14 @@ services:
     command:
       - |
         until kafka-topics --bootstrap-server kafka:29092 --list >/dev/null 2>&1; do sleep 3; done
-        for t in sessions.events audit.timeline sessions.events.DLT audit.timeline.DLT; do
-          kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic $$t \
-            --partitions 3 --replication-factor 1 \
-            --config retention.ms=604800000 --config cleanup.policy=delete
-        done
+        # Mismos tópicos y parámetros que declara kafka-admin (application.yml).
+        crear() {
+          kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic $$1             --partitions 3 --replication-factor 1 --config retention.ms=$$2 --config cleanup.policy=$$3
+        }
+        crear sessions.events      604800000  delete
+        crear sessions.alerts      2592000000 compact,delete
+        crear sessions.events.DLT  1209600000 delete
+        crear sessions.alerts.DLT  1209600000 delete
         kafka-topics --bootstrap-server kafka:29092 --list
 
   kafka-ui:
@@ -60,3 +65,18 @@ services:
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+
+  kafka-admin:
+    build: ./kafka-admin
+    container_name: kafka-admin
+    profiles: ["admin"]
+    restart: unless-stopped
+    depends_on:
+      - kafka
+    ports:
+      - "8087:8087"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      # En un servidor la API de administración siempre debe llevar token.
+      KAFKA_ADMIN_TOKEN: ${KAFKA_ADMIN_TOKEN:?defina KAFKA_ADMIN_TOKEN}
+      JAVA_TOOL_OPTIONS: -Xmx128m -XX:+UseSerialGC

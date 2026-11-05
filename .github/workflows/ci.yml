@@ -17,3 +17,18 @@ jobs:
           docker compose -f apps/compose.yml config -q
           docker compose -f mq/compose.yml config -q
           docker compose -f kafka/compose.yml config -q
+          docker compose -f kafka/compose.cluster.yml config -q
+          KAFKA_BOOTSTRAP=localhost:9092 docker compose -f kafka/compose.ui.yml config -q
+          KAFKA_ADMIN_TOKEN=ci docker compose -f kafka/compose.ec2.yml --profile admin config -q
+
+  test-kafka-admin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Pruebas de kafka-admin (broker Kafka embebido)
+        working-directory: kafka/kafka-admin
+        run: ./mvnw -B test
