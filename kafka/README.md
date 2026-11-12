@@ -104,3 +104,94 @@ hace sola.
 
 La pantalla **Auditoría** del portal muestra el offset de cada partición y el LAG de
 cada grupo (`GET /api/audit/kafka`); **Analítica** lista las alertas.
+
+## Tuning y pruebas de carga
+
+Dónde se ajusta cada cosa y cómo se mide. Las pruebas de carga usan un tópico
+propio (`sessions.loadtest`) para no llenar de eventos falsos la auditoría ni las
+métricas, y solo existen cuando `kafka-admin` corre con `KAFKA_LOADTEST_ENABLED=true`
+(ya viene activado en `compose.cluster.yml`).
+
+### Qué se ajustó
+
+| Dónde | Parámetro | De fábrica | EduTutor | Para qué |
+|---|---|---|---|---|
+| Productor (`sessions`) | `batch.size` | 16 KB | **32 KB** | Agrupa más mensajes por viaje de red |
+| | `linger.ms` | 0 | **20 ms** | Espera un poco para llenar el lote (el evento no se espera de forma síncrona, así que 20 ms no se notan) |
+| | `compression.type` | ninguna | **lz4** | Menos bytes por la red y en disco |
+| | `acks` / idempotencia | 1 / no | **all / sí** | No perder ni duplicar eventos al reintentar |
+| Tópico `sessions.events` | `retention.ms` | 7 días | 7 días | Tiempo máximo que se conserva un evento |
+| | `retention.bytes` | sin límite | **1 GB por partición** | Tope de disco: si se llena antes, borra lo más viejo |
+| | `segment.bytes` | 1 GB | **100 MB** | Kafka solo borra segmentos cerrados; segmentos más chicos permiten borrar antes |
+| Tópico `sessions.loadtest` | `retention.ms` / `retention.bytes` | 7 días / sin límite | **5 min / 50 MB** | Retención agresiva a propósito, para verla en acción |
+| | `segment.ms` / `segment.bytes` | 7 días / 1 GB | **1 min / 10 MB** | Para que haya segmentos cerrados que borrar |
+| Broker (`compose*.yml`) | `log.retention.check.interval.ms` | 5 min | **1 min** | Cada cuánto revisa qué borrar |
+| | `log.retention.hours` / `bytes` | 168 h / sin límite | 168 h / **1 GB** | Tope para cualquier tópico nuevo que no declare el suyo |
+
+### Cómo medir (con `compose.cluster.yml` arriba)
+
+```bash
+# 100.000 mensajes con los valores de fábrica y luego con los de EduTutor
+curl -s -X POST "localhost:8087/api/loadtest?count=100000&payloadBytes=200&perfil=COMPARAR"
+```
+
+`perfil` puede ser `DEFAULT`, `TUNED` o `COMPARAR`; `batchSize`, `lingerMs` y
+`compression` permiten probar otros valores. Los dos perfiles usan `acks=all`, así que
+solo cambia lo que se quiere medir.
+
+**Resultado** (clúster de 3 brokers, factor de réplica 3, `acks=all`, 100.000 mensajes de 200 B):
+
+| | De fábrica | EduTutor | Efecto |
+|---|---|---|---|
+| Duración | 9.314 ms | 4.376 ms | 2,1 veces más rápido |
+| Mensajes por segundo | 10.737 | 22.852 | **+113 %** |
+| Mensajes por petición | 73 | 197 | 2,7 veces más agrupados |
+| Peticiones por segundo | 35 | 15 | **-57 %** menos viajes de red |
+| Tamaño comprimido / original | 1,00 | 0,42 | Viaja el 42 % de los bytes |
+| Errores | 0 | 0 | |
+
+(Los números dependen de la máquina; lo importante es la diferencia entre columnas.)
+
+### El consumidor lento y el LAG
+
+`kafka-admin` incluye un consumidor que tarda 10 ms por mensaje (como si guardara en una
+base de datos), grupo `loadtest-analytics-v1`. Con 1 hilo procesa como máximo 100 mensajes por
+segundo, así que ante la ráfaga se queda atrás:
+
+```bash
+curl -s localhost:8087/api/consumer-groups/loadtest-analytics-v1
+```
+
+Tras lanzar los 200.000 mensajes el LAG fue de 198.704 y bajaba de 100 en 100 por segundo
+(2.000 mensajes en 20 s). Es lo que dispararía una alarma en producción.
+
+**Cómo se arregla**: el tópico tiene 3 particiones, así que se pueden repartir entre 3 hilos
+(o 3 instancias del servicio). Se cambia en caliente, sin reiniciar nada:
+
+```bash
+curl -s -X PUT localhost:8087/api/loadtest/consumer -H 'Content-Type: application/json' -d '{"concurrency":3}'
+```
+
+Con 3 hilos se procesaron 6.201 mensajes en 20 s (unos 300 por segundo), tres veces más
+rápido. Más hilos que particiones no ayudan: el máximo de consumidores útiles de un grupo
+es el número de particiones, y por eso `sessions.events` tiene 3.
+
+### Retención
+
+Después de la ráfaga, el tópico `sessions.loadtest` tenía 200.000 mensajes. Pasados los 5 minutos
+de `retention.ms`, la revisión del broker (cada minuto) borró de la partición 0 los
+primeros 47.296 mensajes (`offsetInicial` pasó de 0 a 47.296), **aunque el consumidor no los había
+leído**:
+
+```bash
+curl -s localhost:8087/api/topics/sessions.loadtest
+```
+
+Dos cosas importantes de cómo funciona:
+
+- Kafka solo borra **segmentos cerrados**, nunca el activo. Por eso se acotan `segment.ms` y
+  `segment.bytes`: con el valor de fábrica (1 GB) un tópico pequeño no borraría nada, por mucho
+  que se baje `retention.ms`.
+- Si un consumidor está más atrás que lo que queda en el tópico, los mensajes borrados se
+  pierden para él (salta al más antiguo disponible). La retención es un tope de disco, no
+  una garantía de entrega: por eso hay que vigilar el LAG.

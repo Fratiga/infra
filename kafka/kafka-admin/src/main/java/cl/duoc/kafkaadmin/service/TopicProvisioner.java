@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import cl.duoc.kafkaadmin.config.KafkaTopicsProperties;
@@ -27,6 +28,7 @@ import cl.duoc.kafkaadmin.config.KafkaTopicsProperties.TopicSpec;
 // corrige las configuraciones que difieren y aumenta las particiones si la
 // declaración pide más. Nunca borra nada ni reduce particiones.
 @Component
+@Order(10)
 public class TopicProvisioner implements ApplicationRunner {
 
 	private static final Logger log = LoggerFactory.getLogger(TopicProvisioner.class);

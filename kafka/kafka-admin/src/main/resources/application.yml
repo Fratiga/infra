@@ -32,6 +32,8 @@ edututor:
         replication-factor: ${KAFKA_REPLICATION_FACTOR:1}
         configs:
           "[retention.ms]": "604800000"
+          "[retention.bytes]": "1073741824"
+          "[segment.bytes]": "104857600"
           "[cleanup.policy]": delete
           "[min.insync.replicas]": ${KAFKA_MIN_ISR:1}
           "[compression.type]": producer
@@ -62,6 +64,31 @@ edututor:
           "[cleanup.policy]": delete
           "[min.insync.replicas]": ${KAFKA_MIN_ISR:1}
 
+      # Solo para las pruebas de carga (LoadTestService). Retención agresiva a
+      # propósito, para ver en poco tiempo cómo Kafka borra lo antiguo: 5 minutos o
+      # 50 MB por partición, lo que ocurra primero. Kafka solo borra segmentos
+      # cerrados, así que los segmentos son chicos (1 minuto / 10 MB).
+      - name: sessions.loadtest
+        partitions: 3
+        replication-factor: ${KAFKA_REPLICATION_FACTOR:1}
+        configs:
+          "[retention.ms]": "300000"
+          "[retention.bytes]": "52428800"
+          "[segment.ms]": "60000"
+          "[segment.bytes]": "10485760"
+          "[cleanup.policy]": delete
+          "[min.insync.replicas]": ${KAFKA_MIN_ISR:1}
+
 # Token de la API de administración (cabecera X-Admin-Token). Vacío = sin
 # exigirlo, solo para desarrollo local; en cualquier servidor debe definirse.
 edututor.admin.token: ${KAFKA_ADMIN_TOKEN:}
+
+# Pruebas de carga y tuning (POST /api/loadtest). Apagado por defecto: en un
+# servidor real no debe poder generarse tráfico masivo.
+edututor.loadtest:
+  enabled: ${KAFKA_LOADTEST_ENABLED:false}
+  topic: sessions.loadtest
+  group: loadtest-analytics-v1
+  # milisegundos que tarda el consumidor en "procesar" cada mensaje
+  consumer-delay-ms: ${KAFKA_LOADTEST_CONSUMER_DELAY_MS:10}
+  consumer-concurrency: ${KAFKA_LOADTEST_CONSUMER_CONCURRENCY:1}

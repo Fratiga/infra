@@ -33,6 +33,12 @@ x-kafka-comun: &kafka-comun
     # Dejar que un grupo nuevo empiece sin esperar 3 s por el rebalanceo inicial.
     KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
     KAFKA_HEAP_OPTS: -Xmx512m -Xms256m
+    # Retención (guia 3.3.2). Los tópicos de EduTutor traen la suya (ver kafka-admin);
+    # esto es el tope para cualquier tópico nuevo: 7 dias o 1 GB por particion, y el
+    # broker revisa cada minuto qué segmentos ya se pueden borrar (por defecto, 5 min).
+    KAFKA_LOG_RETENTION_HOURS: 168
+    KAFKA_LOG_RETENTION_BYTES: 1073741824
+    KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 60000
 
 x-zookeeper-comun: &zookeeper-comun
   image: confluentinc/cp-zookeeper:7.7.1
@@ -136,6 +142,8 @@ services:
       KAFKA_REPLICATION_FACTOR: 3
       KAFKA_MIN_ISR: 2
       KAFKA_ADMIN_TOKEN: ${KAFKA_ADMIN_TOKEN:-}
+      # Pruebas de carga y tuning (POST /api/loadtest); solo en este entorno de pruebas.
+      KAFKA_LOADTEST_ENABLED: "true"
       JAVA_TOOL_OPTIONS: -Xmx192m
 
   kafka-ui:
