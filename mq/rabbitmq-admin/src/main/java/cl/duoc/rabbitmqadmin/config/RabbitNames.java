@@ -18,6 +18,10 @@ public record RabbitNames(Exchange exchange, String dlqSuffix, Command email, Co
 	public record Command(String queue, String directKey, String topicKey, String dlqKey) {
 	}
 
+	// Un binding de la topología base: exchange -> cola con su ruta.
+	public record BindingBase(String exchange, String queue, String routingKey) {
+	}
+
 	public List<Command> commands() {
 		return List.of(email, session, certificate);
 	}
@@ -29,6 +33,14 @@ public record RabbitNames(Exchange exchange, String dlqSuffix, Command email, Co
 	// Recursos que forman la topología base: la API no permite borrarlos.
 	public List<String> managedQueues() {
 		return commands().stream().flatMap(c -> Stream.of(c.queue(), dlqOf(c))).toList();
+	}
+
+	// Los bindings que declara RabbitTopologyConfig: la API no permite borrarlos.
+	public List<BindingBase> managedBindings() {
+		return commands().stream().flatMap(c -> Stream.of(
+			new BindingBase(exchange.direct(), c.queue(), c.directKey()),
+			new BindingBase(exchange.topic(), c.queue(), c.topicKey()),
+			new BindingBase(exchange.deadLetter(), dlqOf(c), c.dlqKey()))).toList();
 	}
 
 	public List<String> managedExchanges() {

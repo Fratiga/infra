@@ -52,6 +52,7 @@ misma instancia o por SSH. Los nombres de exchanges y colas salen de
 | `POST /api/exchanges` | Crea un exchange (`name`, `type`: DIRECT, TOPIC o FANOUT) |
 | `DELETE /api/exchanges/{name}` | Elimina el exchange |
 | `POST /api/bindings` | Enlaza cola y exchange con una ruta |
+| `DELETE /api/bindings?queue=&exchange=&routingKey=` | Quita un binding (204). Los de la topología base devuelven 409. Es idempotente: si ya no existía, también responde 204 |
 
 Valida la entrada (nombres vacíos, caracteres no permitidos, prefijo `amq.`,
 TTL no positivo, tipo desconocido → 400) y devuelve 404 si el recurso no existe y

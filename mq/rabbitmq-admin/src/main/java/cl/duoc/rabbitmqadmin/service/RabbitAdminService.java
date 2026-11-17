@@ -120,6 +120,22 @@ public class RabbitAdminService {
 		log.info("Binding creado: {} -> {} ({})", request.exchange(), request.queue(), request.routingKey());
 	}
 
+	public void eliminarBinding(BindingRequest request) {
+		if (names.managedBindings().contains(
+				new RabbitNames.BindingBase(request.exchange(), request.queue(), request.routingKey()))) {
+			throw new ConflictoException("El binding " + request.exchange() + " -> " + request.queue() + " ("
+				+ request.routingKey() + ") es parte de la topología base y no se puede eliminar");
+		}
+		obtenerCola(request.queue());
+		if (!existeExchange(request.exchange())) {
+			throw new RecursoNoEncontradoException("El exchange '" + request.exchange() + "' no existe");
+		}
+		// RabbitMQ no falla si el binding ya no estaba: quitarlo es idempotente.
+		rabbitAdmin.removeBinding(new Binding(request.queue(), DestinationType.QUEUE, request.exchange(),
+			request.routingKey(), null));
+		log.info("Binding eliminado: {} -> {} ({})", request.exchange(), request.queue(), request.routingKey());
+	}
+
 	private boolean existeExchange(String name) {
 		return Boolean.TRUE.equals(rabbitAdmin.getRabbitTemplate().execute(channel -> {
 			try {

@@ -1,0 +1,35 @@
+# Este repo reúne compose, scripts y los microservicios de administración (Java).
+# Solo debe subirse lo que corresponde a esa tecnología.
+
+# --- Secretos y configuración local: nunca al repositorio
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+
+# --- Java / Maven
+target/
+.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+*.war
+hs_err_pid*
+
+# --- Datos que genera Docker al correr los compose
+data/
+volumes/
+*.log
+
+# --- IDEs y sistema operativo
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+.DS_Store
+Thumbs.db
+.claude/
