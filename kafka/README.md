@@ -195,3 +195,34 @@ Dos cosas importantes de cómo funciona:
 - Si un consumidor está más atrás que lo que queda en el tópico, los mensajes borrados se
   pierden para él (salta al más antiguo disponible). La retención es un tope de disco, no
   una garantía de entrega: por eso hay que vigilar el LAG.
+
+## Clúster de 3 brokers en EC2
+
+Para dejar en la nube el mismo clúster que se prueba en local (3 Zookeeper + 3 brokers, factor de
+réplica 3). Requiere una instancia con **4 GB de RAM o más** y Docker con Compose.
+
+1. En el Security Group de la instancia, abrir los puertos **9092, 9093 y 9094** (los tres brokers)
+   y, si se quiere, **8090** (Kafka UI). Los servicios siguen usando `184.192.63.192:9092` como
+   bootstrap: al conectar reciben la lista de los 3 brokers.
+2. Traer el repo y preparar las variables:
+
+```bash
+cd infra/kafka && cp .env.ec2.example .env
+```
+
+3. Detener el Kafka de un solo broker (sin borrar volúmenes, por si hay que volver atrás):
+
+```bash
+docker compose -f compose.ec2.yml down
+```
+
+4. Levantar el clúster. `kafka-admin` crea los tópicos con 3 particiones y 3 réplicas por su cuenta:
+
+```bash
+docker compose -f compose.cluster.yml up -d --build
+```
+
+5. Comprobar: en Kafka UI (`http://<ip>:8090`) deben verse 3 brokers y los tópicos con RF 3.
+
+Los eventos que había en el Kafka anterior no se migran; no hace falta: `audit` y `report` ignoran
+por `eventId` lo que ya procesaron, y los consumidores arrancan desde el inicio del tópico nuevo.

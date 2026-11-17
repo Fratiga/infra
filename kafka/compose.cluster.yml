@@ -11,6 +11,8 @@
 # Desde el equipo (fuera de Docker):  localhost:19092, 19093, 19094
 # Entre contenedores:                 kafka-1:29092, kafka-2:29092, kafka-3:29092
 #
+# En EC2: copiar .env.ec2.example a .env (IP pública, puertos 9092-9094 y memoria) y
+#         abrir esos puertos en el Security Group. Detalle en README.md.
 # Uso:  docker compose -f compose.cluster.yml up -d --build
 #       Kafka UI -> http://localhost:8090      kafka-admin -> http://localhost:8087
 x-kafka-comun: &kafka-comun
@@ -32,7 +34,7 @@ x-kafka-comun: &kafka-comun
     KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
     # Dejar que un grupo nuevo empiece sin esperar 3 s por el rebalanceo inicial.
     KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-    KAFKA_HEAP_OPTS: -Xmx512m -Xms256m
+    KAFKA_HEAP_OPTS: ${BROKER_HEAP:--Xmx512m -Xms256m}
     # Retención (guia 3.3.2). Los tópicos de EduTutor traen la suya (ver kafka-admin);
     # esto es el tope para cualquier tópico nuevo: 7 dias o 1 GB por particion, y el
     # broker revisa cada minuto qué segmentos ya se pueden borrar (por defecto, 5 min).
@@ -53,6 +55,7 @@ services:
       ZOOKEEPER_SERVER_ID: 1
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+      KAFKA_HEAP_OPTS: ${ZK_HEAP:--Xmx256m -Xms128m}
       ZOOKEEPER_INIT_LIMIT: 5
       ZOOKEEPER_SYNC_LIMIT: 2
       ZOOKEEPER_SERVERS: zookeeper-1:2888:3888;zookeeper-2:2888:3888;zookeeper-3:2888:3888
@@ -67,6 +70,7 @@ services:
       ZOOKEEPER_SERVER_ID: 2
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+      KAFKA_HEAP_OPTS: ${ZK_HEAP:--Xmx256m -Xms128m}
       ZOOKEEPER_INIT_LIMIT: 5
       ZOOKEEPER_SYNC_LIMIT: 2
       ZOOKEEPER_SERVERS: zookeeper-1:2888:3888;zookeeper-2:2888:3888;zookeeper-3:2888:3888
@@ -81,6 +85,7 @@ services:
       ZOOKEEPER_SERVER_ID: 3
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+      KAFKA_HEAP_OPTS: ${ZK_HEAP:--Xmx256m -Xms128m}
       ZOOKEEPER_INIT_LIMIT: 5
       ZOOKEEPER_SYNC_LIMIT: 2
       ZOOKEEPER_SERVERS: zookeeper-1:2888:3888;zookeeper-2:2888:3888;zookeeper-3:2888:3888
@@ -93,11 +98,11 @@ services:
     container_name: kafka-1
     depends_on: [zookeeper-1, zookeeper-2, zookeeper-3]
     ports:
-      - "19092:9092"
+      - "${KAFKA_PORT_1:-19092}:9092"
     environment:
       <<: *kafka-env
       KAFKA_BROKER_ID: 1
-      KAFKA_ADVERTISED_LISTENERS: INTERNO://kafka-1:29092,EXTERNO://${KAFKA_HOST:-localhost}:19092
+      KAFKA_ADVERTISED_LISTENERS: INTERNO://kafka-1:29092,EXTERNO://${KAFKA_HOST:-localhost}:${KAFKA_PORT_1:-19092}
     volumes:
       - kafka_data_1:/var/lib/kafka/data
 
@@ -106,11 +111,11 @@ services:
     container_name: kafka-2
     depends_on: [zookeeper-1, zookeeper-2, zookeeper-3]
     ports:
-      - "19093:9092"
+      - "${KAFKA_PORT_2:-19093}:9092"
     environment:
       <<: *kafka-env
       KAFKA_BROKER_ID: 2
-      KAFKA_ADVERTISED_LISTENERS: INTERNO://kafka-2:29092,EXTERNO://${KAFKA_HOST:-localhost}:19093
+      KAFKA_ADVERTISED_LISTENERS: INTERNO://kafka-2:29092,EXTERNO://${KAFKA_HOST:-localhost}:${KAFKA_PORT_2:-19093}
     volumes:
       - kafka_data_2:/var/lib/kafka/data
 
@@ -119,11 +124,11 @@ services:
     container_name: kafka-3
     depends_on: [zookeeper-1, zookeeper-2, zookeeper-3]
     ports:
-      - "19094:9092"
+      - "${KAFKA_PORT_3:-19094}:9092"
     environment:
       <<: *kafka-env
       KAFKA_BROKER_ID: 3
-      KAFKA_ADVERTISED_LISTENERS: INTERNO://kafka-3:29092,EXTERNO://${KAFKA_HOST:-localhost}:19094
+      KAFKA_ADVERTISED_LISTENERS: INTERNO://kafka-3:29092,EXTERNO://${KAFKA_HOST:-localhost}:${KAFKA_PORT_3:-19094}
     volumes:
       - kafka_data_3:/var/lib/kafka/data
 
